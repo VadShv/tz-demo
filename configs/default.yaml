@@ -1,4 +1,4 @@
-# Hyperparameters for training + evaluation
+# Гиперпараметры обучения + эвалюации
 
 env:
   id: MiniGrid-Empty-8x8-v0
@@ -24,11 +24,13 @@ training:
 planner:
   horizon: 12
   num_sequences: 128
-  # `random_shooting` — no extra hparams. For CEM: elite_frac, num_iters.
+  # `random_shooting` — без дополнительных гиперпараметров. Для CEM: elite_frac, num_iters.
 
 vlm:
   model_name: ViT-B-32
   pretrained: openai
+  # Промпты оставлены на английском: OpenAI-чекпойнт CLIP обучен почти
+  # исключительно на англоязычных подписях — русские промпты дают почти нулевой сигнал.
   goal_prompt: "a red triangle agent standing on the green goal square"
   negative_prompt: "a red triangle agent far from the green goal square"
   discount: 0.9

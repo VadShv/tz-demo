@@ -1,13 +1,13 @@
-"""MiniGrid environment wrapper producing 64x64 RGB observations.
+"""Обёртка над средой MiniGrid, выдающая 64×64 RGB-наблюдения.
 
-We use MiniGrid-Empty-8x8-v0 with pixel observations. The action space
-is restricted to {0: left, 1: right, 2: forward} — the only actions
-meaningful for Empty.
+Используется MiniGrid-Empty-8x8-v0 с пиксельными наблюдениями. Пространство
+действий сокращено до {0: left, 1: right, 2: forward} — только эти действия
+имеют смысл для Empty.
 """
 from __future__ import annotations
 
 import gymnasium as gym
-import minigrid  # noqa: F401  registers envs
+import minigrid  # noqa: F401  регистрирует среды
 import numpy as np
 from PIL import Image
 
@@ -18,7 +18,7 @@ NUM_ACTIONS = len(ACTION_NAMES)
 
 
 class MiniGridPixelEnv:
-    """Thin wrapper around MiniGrid returning uint8 RGB frames of shape (H, W, 3)."""
+    """Тонкая обёртка над MiniGrid; возвращает uint8 RGB-кадры формы (H, W, 3)."""
 
     def __init__(self, env_id: str = "MiniGrid-Empty-8x8-v0", img_size: int = IMG_SIZE, seed: int | None = None):
         self.env_id = env_id
@@ -45,13 +45,14 @@ class MiniGridPixelEnv:
         return obs
 
     def step(self, action: int):
-        assert 0 <= action < NUM_ACTIONS, f"invalid action {action}"
+        assert 0 <= action < NUM_ACTIONS, f"недопустимое действие {action}"
         obs_dict, reward, terminated, truncated, info = self._env.step(int(action))
         self._steps += 1
         obs = self._render()
         self._last_obs = obs
         done = bool(terminated or truncated)
-        # MiniGrid gives sparse reward at goal (positive); we surface a success flag too.
+        # MiniGrid выдаёт разреженную положительную награду при достижении цели;
+        # дополнительно прокидываем флаг success для метрик.
         info = dict(info)
         info["success"] = bool(reward > 0)
         return obs, float(reward), done, info

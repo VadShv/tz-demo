@@ -1,7 +1,7 @@
-"""End-to-end smoke test: trains a tiny RSSM and runs a mini evaluation.
+"""End-to-end smoke-тест: обучает крошечную RSSM и запускает мини-эвалюацию.
 
-Verifies the pipeline works on CPU in ~2-3 minutes without CLIP and
-~5-10 minutes with CLIP.
+Проверяет работоспособность пайплайна на CPU за ~2–3 минуты без CLIP и
+~5–10 минут с CLIP.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ def main(with_vlm: bool = True):
     Path("results").mkdir(exist_ok=True)
 
     print("=" * 60)
-    print("SMOKE TEST: training small RSSM")
+    print("SMOKE-ТЕСТ: обучение маленькой RSSM")
     print("=" * 60)
     train_world_model(
         num_episodes=30,
@@ -29,7 +29,7 @@ def main(with_vlm: bool = True):
     )
 
     print("\n" + "=" * 60)
-    print("SMOKE TEST: evaluating agents")
+    print("SMOKE-ТЕСТ: эвалюация агентов")
     print("=" * 60)
     evaluate(
         ckpt_path="checkpoints/rssm_smoke.pt",
@@ -39,7 +39,7 @@ def main(with_vlm: bool = True):
         num_seq=8,
         include_vlm=with_vlm,
     )
-    print("\nSmoke test complete. See results/metrics.json and results/gifs/")
+    print("\nSmoke-тест завершён. См. results/metrics.json и results/gifs/")
 
 
 if __name__ == "__main__":

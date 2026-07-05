@@ -1,4 +1,4 @@
-"""Full training + evaluation run recommended for a GPU (Colab T4)."""
+"""Полный цикл обучения + эвалюации; рекомендуется GPU (например, Colab T4)."""
 from __future__ import annotations
 
 from src.train_wm import train_world_model

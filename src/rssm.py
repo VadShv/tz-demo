@@ -1,16 +1,16 @@
-"""Compact RSSM (Recurrent State-Space Model) world model in the style of PlaNet/Dreamer.
+"""Компактный RSSM (Recurrent State-Space Model) в стиле PlaNet/Dreamer.
 
-Design choices (kept small for CPU training):
-  * Encoder: 4-layer CNN 64x64 -> 256-d embed
-  * Deterministic recurrent state h_t: GRU with hidden size 128
-  * Stochastic latent z_t: diagonal Gaussian, dim=16, produced by
-    prior p(z_t | h_t) and posterior q(z_t | h_t, e_t)
-  * Decoder: mirrored transposed CNN -> 64x64x3 reconstruction
-  * Reward head: 2-layer MLP on (h_t, z_t) -> scalar
+Архитектурные решения (выбраны с учётом обучения на CPU):
+  * Энкодер: 4-слойный CNN 64x64 -> 256-размерный embed
+  * Детерминированное состояние h_t: GRU с hidden=128
+  * Стохастический латент z_t: диагональная нормаль, dim=16;
+    prior p(z_t | h_t) и posterior q(z_t | h_t, e_t)
+  * Декодер: зеркальный transposed CNN -> реконструкция 64x64x3
+  * Голова награды: 2-слойный MLP над (h_t, z_t) -> скаляр
 
-Losses:
-  * Recon: MSE on normalized [-1, 1] images
-  * KL: KL(posterior || prior) with free bits
+Лоссы:
+  * Recon: MSE по нормализованным в [-1, 1] изображениям
+  * KL: KL(posterior || prior) с free bits
   * Reward: MSE
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ class RSSMConfig:
 
 
 def _img_to_tensor(x: torch.Tensor) -> torch.Tensor:
-    """uint8 (..., H, W, 3) -> float32 (..., 3, H, W) in [-1, 1]."""
+    """uint8 (..., H, W, 3) -> float32 (..., 3, H, W) в [-1, 1]."""
     if x.dtype == torch.uint8:
         x = x.float() / 127.5 - 1.0
     if x.shape[-1] == 3:
@@ -43,7 +43,7 @@ def _img_to_tensor(x: torch.Tensor) -> torch.Tensor:
 
 
 def _tensor_to_img(x: torch.Tensor) -> torch.Tensor:
-    """float (..., 3, H, W) in [-1, 1] -> uint8 (..., H, W, 3)."""
+    """float (..., 3, H, W) в [-1, 1] -> uint8 (..., H, W, 3)."""
     x = (x.clamp(-1, 1) + 1) * 127.5
     x = x.movedim(-3, -1).to(torch.uint8)
     return x
@@ -74,7 +74,7 @@ class ConvEncoder(nn.Module):
 class ConvDecoder(nn.Module):
     def __init__(self, feat_dim: int):
         super().__init__()
-        # start from a 1x1 spatial feature and upsample to 64x64
+        # стартуем с пространственного признака 1x1 и апсамплим до 64x64
         self.fc = nn.Linear(feat_dim, 256)
         self.net = nn.Sequential(
             nn.ConvTranspose2d(256, 128, 5, stride=2),  # 1 -> 5
@@ -125,7 +125,7 @@ class RSSM(nn.Module):
             nn.Linear(cfg.hidden_dim, 1),
         )
 
-    # ---------- state utilities ----------
+    # ---------- утилиты для состояния ----------
     def init_state(self, batch_size: int, device):
         return {
             "h": torch.zeros(batch_size, self.cfg.deter_dim, device=device),
@@ -142,9 +142,9 @@ class RSSM(nn.Module):
             return mean + std * torch.randn_like(std)
         return mean
 
-    # ---------- one-step transitions ----------
+    # ---------- одношаговые переходы ----------
     def img_step(self, prev_state, action_onehot):
-        """Prior step: given (h_{t-1}, z_{t-1}, a_{t-1}) -> h_t, prior z_t."""
+        """Шаг по prior: (h_{t-1}, z_{t-1}, a_{t-1}) -> h_t, prior z_t."""
         x = torch.cat([prev_state["z"], action_onehot], dim=-1)
         x = self.act_stoch_to_hidden(x)
         h = self.gru(x, prev_state["h"])
@@ -154,7 +154,7 @@ class RSSM(nn.Module):
         return {"h": h, "z": z, "prior_mean": prior_mean, "prior_std": prior_std}
 
     def obs_step(self, prev_state, action_onehot, embed):
-        """Posterior step: also incorporates observation embedding."""
+        """Шаг по posterior: дополнительно учитывает embedding наблюдения."""
         prior = self.img_step(prev_state, action_onehot)
         post_input = torch.cat([prior["h"], embed], dim=-1)
         post_params = self.post_net(post_input)
@@ -175,9 +175,9 @@ class RSSM(nn.Module):
     def predict_reward(self, state):
         return self.reward_head(self.feat(state)).squeeze(-1)
 
-    # ---------- rollout in imagination ----------
+    # ---------- rollout в воображении ----------
     def imagine(self, init_state, action_seq_onehot):
-        """action_seq_onehot: (B, H, A). Returns list of states length H+1 incl init."""
+        """action_seq_onehot: (B, H, A). Возвращает список состояний длины H+1 (включая init)."""
         states = [init_state]
         s = init_state
         for t in range(action_seq_onehot.shape[1]):
@@ -185,19 +185,19 @@ class RSSM(nn.Module):
             states.append(s)
         return states
 
-    # ---------- training pass ----------
+    # ---------- проход обучения ----------
     def observe(self, obs_seq, actions_onehot):
         """obs_seq: (B, T+1, H, W, 3) uint8; actions_onehot: (B, T, A).
 
-        Returns list of posterior states length T+1 (state[0] uses only obs[0] via a
-        zero-init prior; from t=1 onward transitions use actions).
+        Возвращает список posterior-состояний длины T+1 (state[0] использует только obs[0]
+        через zero-init prior; с t=1 переходы используют действия).
         """
         B, Tp1 = obs_seq.shape[:2]
         T = Tp1 - 1
         device = actions_onehot.device
         embeds = self.encoder(obs_seq)  # (B, T+1, embed)
 
-        # Bootstrap: use a zero action to run one posterior step at t=0
+        # Bootstrap: нулевое действие для единственного posterior-шага при t=0
         prev = self.init_state(B, device)
         zero_act = torch.zeros(B, self.cfg.action_dim, device=device)
         s0 = self.obs_step(prev, zero_act, embeds[:, 0])
@@ -232,7 +232,7 @@ def compute_losses(model: RSSM, batch, device):
     target = _img_to_tensor(obs)  # (B, T+1, 3, H, W)
     recon_loss = F.mse_loss(recon, target)
 
-    # KL only on steps t>=1 (state[0] has no meaningful prior)
+    # KL только для шагов t>=1 (у state[0] нет осмысленного prior)
     post_mean = torch.stack([s["post_mean"] for s in states[1:]], dim=1)
     post_std = torch.stack([s["post_std"] for s in states[1:]], dim=1)
     prior_mean = torch.stack([s["prior_mean"] for s in states[1:]], dim=1)
@@ -240,7 +240,7 @@ def compute_losses(model: RSSM, batch, device):
     kl = kl_divergence(post_mean, post_std, prior_mean, prior_std)  # (B, T)
     kl_loss = torch.clamp(kl, min=model.cfg.kl_free_bits).mean()
 
-    # Reward on t>=1
+    # Reward для t>=1
     feat_rew = feat[:, 1:]
     pred_rew = model.reward_head(feat_rew).squeeze(-1)
     reward_loss = F.mse_loss(pred_rew, rews)

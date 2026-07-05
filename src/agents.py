@@ -1,4 +1,4 @@
-"""Agents used for evaluation."""
+"""Агенты, используемые в эвалюации: Random / WM+reward / WM+VLM."""
 from __future__ import annotations
 
 import numpy as np
@@ -24,7 +24,7 @@ class RandomAgent:
 
 
 class WorldModelPlanner:
-    """Common base: maintains posterior state from real observations, plans in imagination."""
+    """Общая база: поддерживает posterior-состояние по реальным наблюдениям, планирует в воображении."""
 
     def __init__(self, model: RSSM, score_fn, num_seq: int, horizon: int, rng: np.random.Generator):
         self.model = model
@@ -37,7 +37,7 @@ class WorldModelPlanner:
         self._state = None
 
     def reset(self, obs):
-        # obs: (H, W, 3) uint8
+        # obs: (H, W, 3) uint8 — инициализируем posterior из первого кадра
         self._state = self.model.init_state(1, self.device)
         obs_t = torch.as_tensor(obs, device=self.device).unsqueeze(0)  # (1, H, W, 3)
         embed = self.model.encoder(obs_t)  # (1, embed)
@@ -47,7 +47,7 @@ class WorldModelPlanner:
         self._last_action = 0
 
     def act(self, obs) -> int:
-        # Advance posterior with the last observation given the previous action
+        # Продвигаем posterior по последнему наблюдению с учётом предыдущего действия
         obs_t = torch.as_tensor(obs, device=self.device).unsqueeze(0)
         embed = self.model.encoder(obs_t)
         act_oh = F.one_hot(torch.tensor([self._last_action], device=self.device),

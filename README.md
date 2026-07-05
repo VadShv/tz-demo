@@ -1,52 +1,54 @@
-# World Model + VLM Scorer — Demo
+# World Model + VLM-скорер — демо
 
-A minimal demo that combines a Dreamer-style **RSSM world model** with a
-**VLM-based scorer (CLIP)** for planning in [MiniGrid](https://minigrid.farama.org/).
+Минимальный демо-проект, который объединяет **модель мира в стиле Dreamer (RSSM)**
+с **VLM-скорером на базе CLIP** для планирования в среде
+[MiniGrid](https://minigrid.farama.org/).
 
 ```
                             ┌──────────────────┐
-    real obs  ──encoder──▶  │   RSSM (world    │  ──imagined rollouts──▶  decoded frames
-                            │   model, GRU +   │
-                            │   stoch latent)  │  ──reward head──▶       predicted returns
-                            └──────────────────┘                             │
-                                                                             ▼
+    реальное наблюдение ──▶ │   RSSM (модель   │  ─воображаемые rollout-ы─▶ декодированные кадры
+                            │   мира: GRU +    │
+                            │   стохастический │  ─reward head──▶           предсказанный return
+                            │   латент)        │                                    │
+                            └──────────────────┘                                    ▼
                                    ┌──────────────────────────┐    ┌─────────────────┐
-                                   │  Random-shooting planner │◀──│ CLIP text-image │
-                                   │  picks best first action  │    │ scorer  (VLM)  │
-                                   └──────────────────────────┘    └─────────────────┘
+                                   │  Планировщик             │◀──│  CLIP text-image│
+                                   │  (random shooting):      │    │  скорер (VLM)   │
+                                   │  выбирает первое действие│    └─────────────────┘
+                                   └──────────────────────────┘
 ```
 
-## What's inside
+## Что внутри
 
-| Component | File | Notes |
+| Компонент | Файл | Комментарий |
 |---|---|---|
-| MiniGrid pixel env (64×64 RGB) | `src/env.py` | `MiniGrid-Empty-8x8-v0`, 3 actions |
-| Replay buffer for episodes | `src/replay.py` | sequences for RSSM training |
-| RSSM world model (~2.3M params) | `src/rssm.py` | CNN encoder/decoder, GRU, stochastic latent |
-| CLIP scorer over decoded frames | `src/vlm_scorer.py` | ViT-B/32 OpenAI, contrastive prompts |
-| Random-shooting MPC planner | `src/planner.py` | pluggable scoring |
-| Agents (Random, WM+reward, WM+VLM) | `src/agents.py` | |
-| Training script | `src/train_wm.py` | |
-| Eval script with metrics + GIFs | `src/evaluate.py` | |
+| MiniGrid pixel env (64×64 RGB) | `src/env.py` | `MiniGrid-Empty-8x8-v0`, 3 действия |
+| Replay-буфер эпизодов | `src/replay.py` | последовательности для обучения RSSM |
+| RSSM модель мира (~2.3M параметров) | `src/rssm.py` | CNN encoder/decoder, GRU, стохастический латент |
+| CLIP-скорер по кадрам rollout-а | `src/vlm_scorer.py` | ViT-B/32 OpenAI, контрастивные промпты |
+| Random-shooting MPC планировщик | `src/planner.py` | сменяемая функция скоринга |
+| Агенты (Random, WM+reward, WM+VLM) | `src/agents.py` | |
+| Скрипт обучения | `src/train_wm.py` | |
+| Скрипт eval с метриками и GIF | `src/evaluate.py` | |
 
-## Install
+## Установка
 
 ```bash
 pip install -r requirements.txt
 ```
 
-## Usage
+## Использование
 
-**1. Train the world model** (collects random episodes, then optimizes RSSM):
+**1. Обучить модель мира** (собирает случайные эпизоды и оптимизирует RSSM):
 
 ```bash
 python -m src.train_wm --episodes 200 --updates 2000 --batch 16 --seq 20 \
                       --out checkpoints/rssm.pt
 ```
 
-Recommended settings for a GPU (Colab T4): `--episodes 500 --updates 10000`.
+Рекомендуемые настройки для GPU (Colab T4): `--episodes 500 --updates 10000`.
 
-**2. Evaluate all three agents**:
+**2. Прогнать все три агента**:
 
 ```bash
 python -m src.evaluate --ckpt checkpoints/rssm.pt \
@@ -54,68 +56,81 @@ python -m src.evaluate --ckpt checkpoints/rssm.pt \
                       --horizon 12 --num-seq 128
 ```
 
-Produces `results/metrics.json` and per-agent GIFs in `results/gifs/`.
+На выходе — `results/metrics.json` и GIF-и в `results/gifs/`.
 
-## Method
+## Метод
 
-**World model (RSSM).** Following the recurrent state-space model of
-PlaNet ([Hafner et al. 2018](https://arxiv.org/abs/1811.04551)) and Dreamer
-([Hafner et al. 2020](https://arxiv.org/abs/1912.01603) /
-[Hafner et al. 2023](https://arxiv.org/abs/2301.04104)), the state
-`s_t = (h_t, z_t)` combines a deterministic GRU hidden `h_t` and a
-stochastic latent `z_t`. Training minimizes image reconstruction MSE +
-KL(posterior‖prior) with free bits + reward MSE.
+**Модель мира (RSSM).** Следуя recurrent state-space model из PlaNet
+([Hafner et al., 2018](https://arxiv.org/abs/1811.04551)) и Dreamer
+([Hafner et al., 2020](https://arxiv.org/abs/1912.01603) /
+[Hafner et al., 2023](https://arxiv.org/abs/2301.04104)), состояние
+`s_t = (h_t, z_t)` включает детерминированное скрытое состояние GRU `h_t`
+и стохастический латент `z_t`. Обучение минимизирует MSE-реконструкцию
+изображений + KL(апостериор ‖ приор) с free bits + MSE-предсказание
+вознаграждения.
 
-**Planner.** At each real step, we run *random shooting*: sample `N` action
-sequences of length `H`, imagine each rollout in the world model, score
-it, and take the first action of the best sequence. All CPU-friendly,
-easily replaced by CEM.
+**Планировщик.** На каждом реальном шаге выполняется *random shooting*:
+семплируется `N` последовательностей действий длины `H`, каждая
+разворачивается в воображении моделью мира, скорится, и выполняется
+первое действие лучшей последовательности. Всё работает на CPU; CEM
+подключается как drop-in замена.
 
-**VLM scorer.** We use CLIP ViT-B/32 with contrastive prompts:
+**VLM-скорер.** CLIP ViT-B/32 с контрастивными промптами:
 
-- positive: `"a red triangle agent standing on the green goal square"`
-- negative: `"a red triangle agent far from the green goal square"`
+- позитивный: `"a red triangle agent standing on the green goal square"`
+- негативный: `"a red triangle agent far from the green goal square"`
 
-The score is `100 · (cos_sim(pos) − cos_sim(neg))` averaged
-(discounted) across the *future* decoded frames of the rollout. This
-satisfies the requirement that scoring is applied to imagined future
-observations, not just the current one.
+Скор — это `100 · (cos_sim(pos) − cos_sim(neg))`, усреднённый (с
+дисконтом) по *будущим* декодированным кадрам rollout-а. Это
+удовлетворяет требованию задания, чтобы скоринг применялся к
+воображаемым будущим состояниям, а не только к текущему наблюдению.
 
-**Baselines.**
+**Почему промпты на английском.** CLIP от OpenAI обучен почти
+исключительно на англоязычных подписях; русскоязычные текстовые запросы
+дают близкий к нулю сигнал и делают скорер бесполезным. Для
+русскоязычного скорера потребовалась бы мультиязычная модель, например
+`multilingual-clip` или SigLIP-2 — это возможное направление на
+будущее.
 
-1. `random` — uniform random policy
-2. `wm_reward` — same MPC planner, but scores rollouts with the RSSM's
-   own predicted-reward head instead of the VLM
+**Baselines (обязательные).**
 
-## Results
+1. `random` — равномерная случайная политика
+2. `wm_reward` — тот же MPC-планировщик, но rollout скорится собственной
+   `reward_head` RSSM (без VLM)
 
-See `report/report.pdf` for the full write-up, and
-`results/metrics.json` for raw numbers.
+## Результаты
 
-## Repository layout
+Подробности см. в `report/report.pdf`, сырые числа — в
+`results/metrics.json`.
+
+## Структура репозитория
 
 ```
-wm-vlm-demo/
-├── src/                  # library
-├── scripts/              # convenience scripts
-├── configs/default.yaml  # hyperparameters
-├── checkpoints/          # trained RSSM checkpoints
-├── results/              # metrics + GIFs
-├── report/report.pdf     # short PDF report
-└── notebooks/demo.ipynb  # Colab-friendly notebook
+tz-demo/
+├── src/                  # библиотека
+├── scripts/              # запускалки
+├── configs/default.yaml  # гиперпараметры
+├── checkpoints/          # обученные чекпоинты RSSM
+├── results/              # метрики + GIF
+├── report/report.pdf     # PDF-отчёт
+└── notebooks/demo.ipynb  # Colab-ноутбук
 ```
 
-## Notes on running on CPU vs GPU
+## Запуск на CPU vs GPU
 
-The included smoke-test config (`scripts/run_smoke_test.py`) trains for
-~200 updates on 30 random episodes — enough to verify the pipeline
-end-to-end in ~1 minute on CPU, but *not* enough to get meaningful
-policy performance. For real evaluation numbers, run the full config on
-a GPU (Colab T4 free tier is sufficient).
+Входящий в репозиторий smoke-конфиг (`scripts/run_smoke_test.py`)
+обучает RSSM на 30 случайных эпизодах за ~200 шагов — этого достаточно,
+чтобы за минуту убедиться, что pipeline работает end-to-end на CPU, но
+*недостаточно* для получения осмысленных policy-метрик. Для реальных
+цифр нужен GPU (бесплатного Colab T4 достаточно).
 
-## References
+## Ссылки
 
 - Hafner et al., **PlaNet** — Learning Latent Dynamics for Planning from Pixels. [arXiv:1811.04551](https://arxiv.org/abs/1811.04551)
 - Hafner et al., **Dreamer-V3** — Mastering Diverse Domains through World Models. [arXiv:2301.04104](https://arxiv.org/abs/2301.04104)
 - Radford et al., **CLIP** — Learning Transferable Visual Models. [arXiv:2103.00020](https://arxiv.org/abs/2103.00020)
 - [MiniGrid](https://minigrid.farama.org/) — Chevalier-Boisvert et al., 2023
+
+## Лицензия
+
+MIT

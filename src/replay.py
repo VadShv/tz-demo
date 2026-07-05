@@ -1,6 +1,6 @@
-"""Simple episodic replay buffer for world-model training.
+"""Простой эпизодический буфер опыта для обучения world-model.
 
-Stores full episodes as numpy arrays; samples fixed-length subsequences.
+Хранит целые эпизоды как numpy-массивы; сэмплит подпоследовательности фиксированной длины.
 """
 from __future__ import annotations
 
@@ -37,18 +37,18 @@ class ReplayBuffer:
         return sum(ep.length for ep in self.episodes)
 
     def sample(self, batch_size: int, seq_len: int, rng: random.Random | None = None):
-        """Return dict of tensors, each of shape (B, seq_len, ...)."""
+        """Возвращает словарь тензоров формы (B, seq_len, ...)."""
         rng = rng or random
-        # Only episodes long enough
+        # Оставляем только достаточно длинные эпизоды
         eligible = [ep for ep in self.episodes if ep.length >= seq_len]
         if not eligible:
-            raise ValueError(f"No episodes of length >= {seq_len}")
+            raise ValueError(f"Нет эпизодов длиной ≥ {seq_len}")
         obs_b, act_b, rew_b, done_b = [], [], [], []
         for _ in range(batch_size):
             ep = rng.choice(eligible)
             start = rng.randint(0, ep.length - seq_len)
             end = start + seq_len
-            obs_b.append(ep.obs[start:end + 1])       # seq_len+1 frames (include next)
+            obs_b.append(ep.obs[start:end + 1])       # seq_len+1 кадров (включая следующий)
             act_b.append(ep.actions[start:end])
             rew_b.append(ep.rewards[start:end])
             done_b.append(ep.dones[start:end])

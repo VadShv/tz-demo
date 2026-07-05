@@ -1,16 +1,18 @@
-"""CLIP-based VLM scorer for imagined future frames.
+"""VLM-скорер на базе CLIP для воображаемых будущих кадров.
 
-Given a batch of decoded frames from a world-model rollout, returns a
-scalar "goal-progress" score per frame — the cosine similarity between
-the CLIP image embedding and a text embedding of the goal prompt.
+По пачке декодированных кадров rollout-а world-model возвращает скалярный
+скор «goal-progress» для каждого кадра — косинусное сходство между визуальным
+embedding кадра и текстовым embedding целевого промпта.
 
-Design:
-  * We use open_clip's ViT-B/32 OpenAI checkpoint (small, CPU-friendly).
-  * A pair of contrasting prompts is supported ("goal" vs "not goal");
-    the returned score is softmax(sim_goal - sim_not_goal). This is more
-    discriminative than raw similarity for MiniGrid-style renders.
-  * All CLIP calls run under torch.inference_mode() and the model is
-    frozen (eval).
+Проектные решения:
+  * Используется ViT-B/32 OpenAI через open_clip (компактная, пригодная для CPU).
+  * Поддерживается пара контрастных промптов («goal» vs «not goal»);
+    возвращаемый скор = 100·(sim_goal − sim_not_goal). На рендерах MiniGrid
+    такой сигнал более дискриминативен, чем голое сходство.
+  * Все вызовы CLIP выполняются под torch.inference_mode(); модель заморожена (eval).
+
+Примечание. Промпты оставлены на английском: OpenAI-чекпойнт CLIP обучен почти
+исключительно на англоязычных подписях — русские промпты дают почти нулевой сигнал.
 """
 from __future__ import annotations
 
@@ -50,13 +52,13 @@ class CLIPScorer:
             text_features = F.normalize(text_features, dim=-1)
         self.text_features = text_features  # (P, D)
 
-        # CLIP normalisation stats
+        # Статистики нормализации CLIP
         self._mean = torch.tensor([0.48145466, 0.4578275, 0.40821073], device=device).view(1, 3, 1, 1)
         self._std = torch.tensor([0.26862954, 0.26130258, 0.27577711], device=device).view(1, 3, 1, 1)
 
     def _prepare(self, imgs: torch.Tensor) -> torch.Tensor:
-        """imgs: (N, 3, H, W) in [-1, 1] float or (N, H, W, 3) uint8/float.
-        Returns CLIP-normalized 224x224 tensor.
+        """imgs: (N, 3, H, W) в [-1, 1] float или (N, H, W, 3) uint8/float.
+        Возвращает CLIP-нормализованный тензор 224x224.
         """
         if imgs.dtype == torch.uint8:
             imgs = imgs.float() / 255.0
@@ -65,7 +67,7 @@ class CLIPScorer:
         else:
             if imgs.shape[-1] == 3 and imgs.dim() == 4:
                 imgs = imgs.movedim(-1, -3)
-            # From RSSM decoder we expect [-1, 1]
+            # От декодера RSSM ожидаем диапазон [-1, 1]
             if imgs.min() < 0:
                 imgs = (imgs.clamp(-1, 1) + 1) / 2
         imgs = F.interpolate(imgs, size=224, mode="bilinear", align_corners=False)
@@ -74,15 +76,15 @@ class CLIPScorer:
 
     @torch.inference_mode()
     def score(self, imgs: torch.Tensor) -> torch.Tensor:
-        """Return a scalar score per image. Higher = closer to goal."""
+        """Скалярный скор для каждого изображения. Больше = ближе к цели."""
         x = self._prepare(imgs.to(self.device))
         feats = self.model.encode_image(x)
         feats = F.normalize(feats, dim=-1)
         sims = feats @ self.text_features.T  # (N, P)
         if sims.shape[-1] == 1:
             return sims.squeeze(-1)
-        # Contrastive: prefer larger goal-sim relative to negative
-        logits = 100.0 * sims  # CLIP standard scaling
+        # Контрастный вариант: поощряем большее sim для цели относительно негативного промпта
+        logits = 100.0 * sims  # стандартное масштабирование CLIP
         return logits[:, 0] - logits[:, 1]
 
     @torch.inference_mode()

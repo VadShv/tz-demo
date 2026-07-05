@@ -1,4 +1,4 @@
-"""World-model training loop."""
+"""Цикл обучения world-model (RSSM)."""
 from __future__ import annotations
 
 import argparse
@@ -36,19 +36,19 @@ def train_world_model(
     env = MiniGridPixelEnv(env_id=env_id)
     buffer = ReplayBuffer(capacity=num_episodes + 10)
 
-    print(f"[data] Collecting {num_episodes} random episodes...")
+    print(f"[data] Сбор {num_episodes} случайных эпизодов...")
     for i in tqdm(range(num_episodes)):
         ep = collect_random_episode(env, seed=seed + i)
         buffer.add(ep)
     env.close()
-    print(f"[data] Collected. Transitions: {buffer.num_transitions}, "
-          f"longest ep: {max(ep.length for ep in buffer.episodes)}")
+    print(f"[data] Собрано. Переходов: {buffer.num_transitions}, "
+          f"длиннейший эпизод: {max(ep.length for ep in buffer.episodes)}")
 
-    # Filter seq_len if too long
+    # Уменьшаем seq_len, если он больше самого длинного эпизода
     max_ep_len = max(ep.length for ep in buffer.episodes)
     if seq_len > max_ep_len:
         seq_len = max(4, min(20, max_ep_len))
-        print(f"[data] Reducing seq_len to {seq_len}")
+        print(f"[data] Сокращаю seq_len до {seq_len}")
 
     cfg = RSSMConfig(action_dim=env.num_actions if hasattr(env, "num_actions") else 3)
     model = RSSM(cfg).to(device)
@@ -76,7 +76,7 @@ def train_world_model(
                   f"elapsed={info['elapsed_s']}s")
 
     torch.save({"model": model.state_dict(), "config": cfg.__dict__, "history": history}, save_path)
-    print(f"[train] saved to {save_path}")
+    print(f"[train] сохранено в {save_path}")
     return model, cfg, history
 
 

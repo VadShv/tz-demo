@@ -1,6 +1,6 @@
-"""Build the PDF report using ReportLab.
+"""Сборка PDF-отчёта через ReportLab (полностью на русском языке).
 
-Reads results/metrics.json (if it exists) and writes report/report.pdf.
+Читает results/metrics.json (если он есть) и пишет report/report.pdf.
 """
 from __future__ import annotations
 
@@ -8,10 +8,9 @@ import json
 import os
 from pathlib import Path
 
-import requests
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import cm, mm
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import cm
 from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -24,8 +23,8 @@ ROOT = Path(__file__).resolve().parents[1]
 METRICS_PATH = ROOT / "results" / "metrics.json"
 OUT_PATH = ROOT / "report" / "report.pdf"
 
-# ---------- fonts ----------
-# Prefer DejaVu Sans which is present on standard Linux; fall back to Helvetica.
+# ---------- шрифты ----------
+# DejaVu Sans поддерживает кириллицу и обычно установлен на Linux.
 SYSTEM_FONTS = {
     "Body-Regular": [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -34,6 +33,10 @@ SYSTEM_FONTS = {
     "Body-Bold": [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+    ],
+    "Body-Mono": [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSansMono.ttf",
     ],
 }
 
@@ -55,7 +58,7 @@ def _register_fonts():
     return have
 
 
-# ---------- styles ----------
+# ---------- цвета ----------
 NAVY = colors.HexColor("#1B474D")
 TEAL = colors.HexColor("#20808D")
 INK = colors.HexColor("#28251D")
@@ -66,6 +69,7 @@ BG = colors.HexColor("#F7F6F2")
 def _styles(have_custom: bool):
     body_font = "Body-Regular" if have_custom else "Helvetica"
     bold_font = "Body-Bold" if have_custom else "Helvetica-Bold"
+    mono_font = "Body-Mono" if have_custom else "Courier"
     styles = {
         "title": ParagraphStyle(
             "title", fontName=bold_font, fontSize=22, leading=27, textColor=INK,
@@ -88,8 +92,9 @@ def _styles(have_custom: bool):
         "small": ParagraphStyle(
             "small", fontName=body_font, fontSize=8.5, leading=11, textColor=MUTED),
         "code": ParagraphStyle(
-            "code", fontName="Courier", fontSize=8.5, leading=11, textColor=INK,
+            "code", fontName=mono_font, fontSize=8.5, leading=11, textColor=INK,
             backColor=BG, borderPadding=4, spaceAfter=6, leftIndent=6),
+        "mono_name": mono_font,
     }
     return styles
 
@@ -122,9 +127,9 @@ def _aggregate(all_results):
 
 
 def _results_table(agg, styles):
-    header = ["Agent", "Success rate", "Mean return", "Mean length", "Seeds × eps."]
+    header = ["Агент", "Успех, %", "Ср. return", "Ср. длина", "Seed × эп."]
     rows = [header]
-    label = {"random": "Random", "wm_reward": "WM planning (no VLM)", "wm_vlm": "WM planning + VLM"}
+    label = {"random": "Random", "wm_reward": "WM-планирование (без VLM)", "wm_vlm": "WM-планирование + VLM"}
     for k in ["random", "wm_reward", "wm_vlm"]:
         if k not in agg:
             rows.append([label[k], "—", "—", "—", "—"])
@@ -137,11 +142,12 @@ def _results_table(agg, styles):
             f"{v['mean_steps']:.1f}",
             f"{v['num_seeds']} × {v['n_ep']}",
         ])
-    t = Table(rows, colWidths=[4.4*cm, 3.0*cm, 2.7*cm, 2.7*cm, 2.7*cm])
+    t = Table(rows, colWidths=[5.4*cm, 2.6*cm, 2.4*cm, 2.4*cm, 2.4*cm])
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), NAVY),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("FONTNAME", (0, 0), (-1, 0), styles["body"].fontName),
+        ("FONTNAME", (0, 1), (-1, -1), styles["body"].fontName),
         ("FONTSIZE", (0, 0), (-1, -1), 9),
         ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
         ("TOPPADDING", (0, 0), (-1, 0), 6),
@@ -157,127 +163,153 @@ def _results_table(agg, styles):
 def build():
     have_fonts = _register_fonts()
     styles = _styles(have_fonts)
+    cf = styles["mono_name"]
     metrics = _load_metrics()
 
     doc = SimpleDocTemplate(
         str(OUT_PATH), pagesize=A4,
         leftMargin=2.0*cm, rightMargin=2.0*cm,
         topMargin=2.0*cm, bottomMargin=2.0*cm,
-        title="World Model + VLM Scorer — Demo Report",
+        title="World Model + VLM-скорер — демо-отчёт",
         author="Perplexity Computer",
     )
     story = []
 
-    # ---- Cover ----
-    story.append(Paragraph("World Model + VLM Scorer", styles["title"]))
+    # ---- Обложка ----
+    story.append(Paragraph("World Model + VLM-скорер", styles["title"]))
     story.append(Paragraph(
-        "A minimal Dreamer-style RSSM + CLIP-based planner in MiniGrid",
+        "Минимальный демо-проект: RSSM в стиле Dreamer + CLIP-планировщик в MiniGrid",
         styles["subtitle"]))
 
-    story.append(Paragraph("1. Task", styles["h2"]))
+    story.append(Paragraph("1. Задача", styles["h2"]))
     story.append(Paragraph(
-        "The goal is to combine a learned world model (Dreamer-style RSSM) with a "
-        "vision-language scorer (CLIP) to plan actions in a simple gridworld. Actions "
-        "are chosen by MPC over imagined rollouts. The VLM turns imagined future frames "
-        "into a scalar goal-progress score used inside the planner's objective.",
+        "Цель — объединить обученную модель мира (RSSM в стиле Dreamer) с "
+        "vision-language скорером (CLIP) для планирования действий агента "
+        "в простой сеточной среде. Действия выбираются MPC-планировщиком по "
+        "воображаемым rollout-ам в модели мира. VLM превращает воображаемые "
+        "будущие кадры в скалярную оценку прогресса к цели, которая входит в "
+        "целевую функцию планировщика.",
         styles["body"]))
 
-    # ---- Method ----
-    story.append(Paragraph("2. Method", styles["h2"]))
+    # ---- Метод ----
+    story.append(Paragraph("2. Метод", styles["h2"]))
 
-    story.append(Paragraph("2.1 Environment", styles["h3"]))
+    story.append(Paragraph("2.1 Среда", styles["h3"]))
     story.append(Paragraph(
-        "MiniGrid <b>Empty-8x8-v0</b>. Observations are the full-view RGB renders "
-        "resized to 64×64. We restrict the action space to <font face='%s'>{left, right, forward}</font> "
-        "(the three actions that matter in Empty). Reward is sparse: a positive value on the goal cell, "
-        "zero otherwise, plus a small time penalty embedded in the environment." %
-        styles["code"].fontName,
+        f"MiniGrid <b>Empty-8x8-v0</b>. Наблюдение — полноэкранный RGB-рендер, "
+        f"уменьшенный до 64×64. Пространство действий сокращено до "
+        f"<font face='{cf}'>{{left, right, forward}}</font> (только эти три действия "
+        f"осмысленны в Empty). Вознаграждение разреженное: положительное значение при "
+        f"попадании на целевую клетку, ноль иначе, плюс небольшой штраф за время, "
+        f"встроенный в среду.",
         styles["body"]))
 
-    story.append(Paragraph("2.2 RSSM world model", styles["h3"]))
+    story.append(Paragraph("2.2 Модель мира RSSM", styles["h3"]))
     story.append(Paragraph(
-        "A compact recurrent state-space model in the style of PlaNet (Hafner et al., 2018) "
-        "and Dreamer (Hafner et al., 2020, 2023). State <font face='%s'>s_t = (h_t, z_t)</font> is a "
-        "deterministic GRU hidden <font face='%s'>h_t &#8712; R^128</font> paired with a stochastic latent "
-        "<font face='%s'>z_t &#8712; R^16</font> drawn from a diagonal Gaussian." %
-        (styles["code"].fontName, styles["code"].fontName, styles["code"].fontName),
+        f"Компактная recurrent state-space model в стиле PlaNet (Hafner et al., 2018) "
+        f"и Dreamer (Hafner et al., 2020, 2023). Состояние "
+        f"<font face='{cf}'>s_t = (h_t, z_t)</font> состоит из детерминированного скрытого "
+        f"состояния GRU <font face='{cf}'>h_t &#8712; R^128</font> и стохастического "
+        f"латента <font face='{cf}'>z_t &#8712; R^16</font>, семплируемого из диагональной "
+        f"гауссианы.",
         styles["body"]))
-    story.append(Paragraph("Components (≈2.3M parameters total):", styles["body"]))
+    story.append(Paragraph("Компоненты (всего ≈2.3M параметров):", styles["body"]))
     for b in [
-        "<b>Encoder</b> — 4-layer strided CNN 64×64→256-d embed.",
-        "<b>Recurrent dynamics</b> — GRUCell on (z<sub>t-1</sub>, a<sub>t-1</sub>) → h<sub>t</sub>.",
-        "<b>Prior</b> — MLP h<sub>t</sub> → μ, σ for p(z<sub>t</sub>|h<sub>t</sub>).",
-        "<b>Posterior</b> — MLP (h<sub>t</sub>, e<sub>t</sub>) → μ, σ for q(z<sub>t</sub>|h<sub>t</sub>, o<sub>t</sub>).",
-        "<b>Decoder</b> — transposed CNN feat→(3,64,64) reconstruction.",
-        "<b>Reward head</b> — MLP feat → scalar.",
+        "<b>Encoder</b> — 4-слойная свёрточная сеть 64×64 → 256-мерный embedding.",
+        "<b>Рекуррентная динамика</b> — GRUCell на (z<sub>t-1</sub>, a<sub>t-1</sub>) → h<sub>t</sub>.",
+        "<b>Prior</b> — MLP h<sub>t</sub> → μ, σ для p(z<sub>t</sub>|h<sub>t</sub>).",
+        "<b>Posterior</b> — MLP (h<sub>t</sub>, e<sub>t</sub>) → μ, σ для q(z<sub>t</sub>|h<sub>t</sub>, o<sub>t</sub>).",
+        "<b>Decoder</b> — транспонированная CNN feat → (3, 64, 64), реконструкция изображения.",
+        "<b>Reward head</b> — MLP feat → скаляр.",
     ]:
         story.append(Paragraph(f"• {b}", styles["bullet"]))
     story.append(Paragraph(
-        "Loss: reconstruction MSE + KL(posterior‖prior) with free bits (1.0) + reward MSE. "
-        "Training uses random-policy episodes sampled from a replay buffer.",
+        "Функция потерь: MSE-реконструкция изображений + KL(апостериор ‖ приор) с "
+        "free bits (1.0) + MSE-предсказание вознаграждения. Обучение идёт на "
+        "случайных эпизодах, накопленных в replay-буфере.",
         styles["body"]))
 
-    story.append(Paragraph("2.3 Planner (MPC / random shooting)", styles["h3"]))
+    story.append(Paragraph("2.3 Планировщик (MPC / random shooting)", styles["h3"]))
     story.append(Paragraph(
-        "At each real step we (i) update the RSSM posterior with the current observation, "
-        "(ii) sample <b>N</b> candidate action sequences of length <b>H</b>, "
-        "(iii) imagine each rollout with the RSSM prior, decode all H+1 frames and gather "
-        "predicted rewards, (iv) score each rollout, (v) execute the first action of the "
-        "highest-scoring sequence and repeat. Default N=128, H=12. CEM is a drop-in improvement "
-        "and would be a natural next step; random shooting is enough to compare scorers.",
+        "На каждом реальном шаге: (i) обновляем апостериор RSSM текущим наблюдением, "
+        "(ii) семплируем <b>N</b> кандидатных последовательностей действий длины <b>H</b>, "
+        "(iii) разворачиваем каждую последовательность в воображении по приору RSSM, "
+        "декодируем H+1 кадров и получаем предсказанные вознаграждения, "
+        "(iv) скорим каждый rollout, (v) выполняем первое действие лучшей "
+        "последовательности и повторяем. По умолчанию N=128, H=12. CEM — очевидное "
+        "улучшение и естественное продолжение; random shooting достаточен для "
+        "сравнения скореров.",
         styles["body"]))
 
-    story.append(Paragraph("2.4 VLM scorer", styles["h3"]))
+    story.append(Paragraph("2.4 VLM-скорер", styles["h3"]))
     story.append(Paragraph(
-        "We use <b>CLIP ViT-B/32 (OpenAI)</b> via <font face='%s'>open_clip</font>. "
-        "Text prompts are used contrastively:" % styles["code"].fontName,
+        f"Используется <b>CLIP ViT-B/32 (OpenAI)</b> через "
+        f"<font face='{cf}'>open_clip</font>. Текстовые промпты применяются контрастивно:",
         styles["body"]))
     story.append(Paragraph(
-        "&nbsp;&nbsp;• positive: <i>&ldquo;a red triangle agent standing on the green goal square&rdquo;</i><br/>"
-        "&nbsp;&nbsp;• negative: <i>&ldquo;a red triangle agent far from the green goal square&rdquo;</i>",
+        "&nbsp;&nbsp;• позитивный: <i>&ldquo;a red triangle agent standing on the green goal square&rdquo;</i><br/>"
+        "&nbsp;&nbsp;• негативный: <i>&ldquo;a red triangle agent far from the green goal square&rdquo;</i>",
         styles["body"]))
     story.append(Paragraph(
-        "For each imagined <b>future</b> frame (t = 1 … H) we compute "
-        "<font face='%s'>score = 100·(cos(pos) − cos(neg))</font>, then aggregate with a discount "
-        "γ = 0.9. Only future frames enter the score — the current observation is excluded — "
-        "which satisfies the assignment's constraint that scoring is applied to rollout frames." %
-        styles["code"].fontName,
+        f"Для каждого воображаемого <b>будущего</b> кадра (t = 1 … H) вычисляется "
+        f"<font face='{cf}'>score = 100·(cos(pos) − cos(neg))</font>, затем эти "
+        f"значения агрегируются с дисконтом γ = 0.9. В финальную оценку rollout-а "
+        f"попадают только будущие кадры — текущее наблюдение исключается, — что "
+        f"удовлетворяет требованию задания.",
+        styles["body"]))
+    story.append(Paragraph(
+        "<b>Почему промпты на английском.</b> CLIP от OpenAI обучен почти "
+        "исключительно на англоязычных подписях; при русскоязычных промптах сигнал "
+        "падает практически до нуля, и скорер становится бесполезным. Для "
+        "русскоязычного скорера потребовалась бы мультиязычная модель "
+        "(например, <i>multilingual-clip</i> или SigLIP-2) — см. раздел про future work.",
         styles["body"]))
 
-    story.append(Paragraph("2.5 Baselines", styles["h3"]))
-    story.append(Paragraph("Two required baselines are included:", styles["body"]))
+    story.append(Paragraph("2.5 Baseline-агенты", styles["h3"]))
+    story.append(Paragraph("В сравнение включены оба обязательных baseline:", styles["body"]))
     for b in [
-        "<b>Random</b> — uniform sampling over the 3 actions.",
-        "<b>WM planning without VLM</b> — same MPC pipeline, but the scoring function is the "
-        "sum of the RSSM's own predicted rewards over the horizon.",
+        "<b>Random</b> — равномерная случайная политика по 3 действиям.",
+        "<b>WM-планирование без VLM</b> — тот же MPC-пайплайн, но функция скоринга — "
+        "сумма предсказанных вознаграждений <font face='%s'>reward_head</font> RSSM "
+        "по горизонту." % cf,
     ]:
         story.append(Paragraph(f"• {b}", styles["bullet"]))
 
     story.append(PageBreak())
 
-    # ---- Results ----
-    story.append(Paragraph("3. Results", styles["h2"]))
+    # ---- Результаты ----
+    story.append(Paragraph("3. Результаты", styles["h2"]))
     if metrics:
         agg = _aggregate(metrics)
         first = next(iter(metrics.values()))
         n_ep = first["num_episodes"]
         n_seeds = len({v["seed"] for v in metrics.values()})
         story.append(Paragraph(
-            f"Evaluation: {n_seeds} seed(s) × {n_ep} episodes per agent. "
-            "Success = agent reaches the green goal within the environment's step budget.",
+            f"Эвалюация: {n_seeds} seed(-ов) × {n_ep} эпизодов на агента. "
+            "Успех = агент достиг зелёной цели в пределах бюджета шагов среды.",
             styles["body"]))
         story.append(_results_table(agg, styles))
         story.append(Spacer(1, 6))
         story.append(Paragraph(
-            "Raw per-seed metrics are in <font face='%s'>results/metrics.json</font>. "
-            "First-episode GIFs of each agent are in <font face='%s'>results/gifs/</font>." %
-            (styles["code"].fontName, styles["code"].fontName),
+            f"Сырые метрики по каждому seed — в файле "
+            f"<font face='{cf}'>results/metrics.json</font>. GIF-и первого эпизода "
+            f"каждого агента — в <font face='{cf}'>results/gifs/</font>.",
             styles["small"]))
+        story.append(Spacer(1, 4))
+        story.append(Paragraph(
+            "<b>Замечание о цифрах в таблице.</b> Приведённые числа получены "
+            "в CPU-sandbox по smoke-конфигу (30 случайных эпизодов, 200 шагов "
+            "обучения, 2 эпизода эвалюации). Это доказательство работоспособности "
+            "пайплайна, а не финальные метрики. Для полноценной эвалюации "
+            "запустите обучение на GPU с настройками "
+            f"<font face='{cf}'>--episodes 300 --updates 10000</font> — цифры "
+            "перезапишутся автоматически.",
+            styles["body"]))
     else:
         story.append(Paragraph(
-            "<i>No results file found yet.</i> The pipeline is verified end-to-end via the "
-            "smoke test (see <font face='%s'>scripts/run_smoke_test.py</font>); to fill in this "
-            "table, run:" % styles["code"].fontName,
+            f"<i>Файл с метриками не найден.</i> Пайплайн проверен end-to-end через "
+            f"smoke-тест (см. <font face='{cf}'>scripts/run_smoke_test.py</font>); "
+            f"чтобы заполнить таблицу, выполните:",
             styles["body"]))
         story.append(Paragraph(
             "python -m src.train_wm --episodes 300 --updates 10000<br/>"
@@ -285,86 +317,102 @@ def build():
             styles["code"]))
         story.append(_results_table({}, styles))
 
-    story.append(Paragraph("3.1 Visualisation", styles["h3"]))
+    story.append(Paragraph("3.1 Визуализация", styles["h3"]))
     gif_dir = ROOT / "results" / "gifs"
-    png_examples = sorted(gif_dir.glob("*.png")) if gif_dir.exists() else []
+    png_examples = sorted(gif_dir.glob("*_end.png")) if gif_dir.exists() else []
     if png_examples:
-        # Include only first PNG per agent
+        # По одной картинке на агента
         seen = set()
+        agent_labels = {
+            "random_seed0_ep0_end": "Random — финальный кадр эпизода",
+            "wm_reward_seed0_ep0_end": "WM-планирование (без VLM) — финальный кадр",
+            "wm_vlm_seed0_ep0_end": "WM-планирование + VLM — финальный кадр",
+        }
         for p in png_examples:
-            key = p.stem.split("_seed")[0]
+            key = p.stem.split("_ep")[0]
             if key in seen:
                 continue
             seen.add(key)
-            story.append(Paragraph(p.stem, styles["small"]))
+            caption = agent_labels.get(p.stem, p.stem)
+            story.append(Paragraph(caption, styles["small"]))
             story.append(Image(str(p), width=6*cm, height=6*cm))
             story.append(Spacer(1, 4))
     else:
-        cf = styles["code"].fontName
         story.append(Paragraph(
-            f"Rollout snapshots and per-agent GIFs are written to "
-            f"<font face='{cf}'>results/gifs/</font> during evaluation. Example filenames: "
+            f"Снимки rollout-ов и GIF-и каждого агента записываются в "
+            f"<font face='{cf}'>results/gifs/</font> при эвалюации. Пример имён файлов: "
             f"<font face='{cf}'>random_seed0_ep0.gif</font>, "
             f"<font face='{cf}'>wm_reward_seed0_ep0.gif</font>, "
             f"<font face='{cf}'>wm_vlm_seed0_ep0.gif</font>.",
             styles["body"]))
 
-    # ---- Discussion ----
-    story.append(Paragraph("4. Discussion", styles["h2"]))
+    # ---- Обсуждение ----
+    story.append(Paragraph("4. Обсуждение", styles["h2"]))
 
-    story.append(Paragraph("4.1 Main failure modes observed", styles["h3"]))
+    story.append(Paragraph("4.1 Основные failure modes", styles["h3"]))
     for b in [
-        "<b>Blurry imagined frames.</b> On CPU with a small training budget, the RSSM decoder "
-        "produces low-detail reconstructions of imagined states — the agent triangle and the "
-        "goal square are recognizable only as coloured blobs. This directly degrades the VLM "
-        "signal: CLIP's confidence in either prompt is muted, and the contrast <i>pos − neg</i> "
-        "becomes noisy for long horizons.",
-        "<b>Compounding rollout drift.</b> The prior is trained only on 10–20-step subsequences. "
-        "Rolling out past that horizon in imagination accumulates errors and the frames start "
-        "to look nothing like real MiniGrid states, which further hurts the CLIP scorer.",
-        "<b>CLIP prompt sensitivity.</b> Small changes to the prompts ("
-        "&ldquo;agent on the goal&rdquo; vs &ldquo;red triangle on green goal&rdquo;) shift the "
-        "score distribution significantly. A contrastive pair (positive − negative) is much more "
-        "stable than a single-prompt cosine similarity, but the choice of the <i>negative</i> "
-        "prompt matters too.",
-        "<b>Reward head is very sparse.</b> Because the only positive reward is at the goal and "
-        "random data rarely reaches the goal in 8×8 Empty, the RSSM's reward head is close to "
-        "constant. The <i>wm_reward</i> baseline therefore behaves near-randomly, and the VLM "
-        "signal is the primary source of directed exploration in this setup.",
-        "<b>MiniGrid rendering vs. natural images.</b> CLIP is trained on natural photographs; "
-        "MiniGrid renders are cartoon-like and out-of-distribution. Score gradients along a "
-        "trajectory exist but are small, which is why we need a contrastive pair and a discount "
-        "over the horizon rather than picking a single frame.",
+        "<b>Размытые воображаемые кадры.</b> На CPU с маленьким бюджетом обучения "
+        "decoder RSSM выдаёт низкодетальные реконструкции воображаемых состояний — "
+        "красный треугольник агента и зелёная клетка цели различимы только как "
+        "цветовые пятна. Это напрямую ухудшает VLM-сигнал: уверенность CLIP по "
+        "обоим промптам приглушена, а контраст <i>pos − neg</i> становится шумным "
+        "на длинных горизонтах.",
+        "<b>Накопление ошибок в rollout-е.</b> Приор обучается на подпоследовательностях "
+        "длины 10–20 шагов. При развёртке дальше этого горизонта в воображении ошибки "
+        "накапливаются, и кадры перестают напоминать реальные состояния MiniGrid, "
+        "что дополнительно ухудшает CLIP-скорер.",
+        "<b>Чувствительность CLIP к формулировке промптов.</b> Небольшие изменения "
+        "формулировки (&laquo;agent on the goal&raquo; vs &laquo;red triangle on green "
+        "goal&raquo;) заметно смещают распределение скоров. Контрастивная пара "
+        "(positive − negative) намного стабильнее одиночного cosine similarity, но и "
+        "выбор <i>негативного</i> промпта имеет значение.",
+        "<b>Reward head очень разреженный.</b> Так как единственный положительный "
+        "reward — попадание на цель, а случайные политики редко доходят до цели в "
+        "8×8 Empty, reward head RSSM оказывается почти константным. Из-за этого "
+        "baseline <i>wm_reward</i> ведёт себя почти как случайный, и VLM-сигнал "
+        "остаётся основным источником направленного исследования.",
+        "<b>Домен MiniGrid vs. натуральные фотографии.</b> CLIP обучен на "
+        "натуральных изображениях, а MiniGrid рендерится в мультяшной стилистике и "
+        "лежит вне распределения CLIP. Градиенты скора вдоль траектории существуют, "
+        "но малы — именно поэтому нужна контрастивная пара и дисконт по горизонту, а "
+        "не выбор одиночного кадра.",
+        "<b>Многоязычность.</b> CLIP от OpenAI почти не знает русский язык, поэтому "
+        "промпты приходится писать по-английски. Русскоязычные формулировки давали "
+        "распределение скоров, близкое к шуму.",
     ]:
         story.append(Paragraph(f"• {b}", styles["bullet"]))
 
-    story.append(Paragraph("4.2 What we would try with more time", styles["h3"]))
+    story.append(Paragraph("4.2 Что попробовать при большем времени (future work)", styles["h3"]))
     for b in [
-        "<b>Longer training with more diverse data.</b> Mix random + planner-collected rollouts "
-        "(Dreamer's data-collection loop) and train the RSSM for 100k+ updates. Reward-head "
-        "accuracy in particular should improve dramatically once the buffer contains successful "
-        "trajectories.",
-        "<b>CEM over random shooting.</b> Replace random shooting with a small CEM (e.g. 3 "
-        "iterations, top-k=10% elites, 100 candidates). Same interface, better sample "
-        "efficiency in the planner.",
-        "<b>Actor-critic on top of the world model.</b> The full Dreamer objective (imagined "
-        "policy trained on λ-returns of a value function) would remove the per-step MPC cost "
-        "and produce a stronger baseline.",
-        "<b>Better VLM.</b> SigLIP tends to be a stronger scorer on agent-centric captions, "
-        "and DINO/CLIPSeg / Grounded-SAM provide dense goal maps rather than a single scalar. "
-        "Alternatively, distill CLIP scores into a small MLP head trained on decoded frames to "
-        "avoid running CLIP inside the planner loop (huge speed-up).",
-        "<b>Score real frames too.</b> A useful ablation: apply the VLM to the real observation "
-        "at each step as a shaping bonus, so the RSSM reward head can learn a dense pseudo-reward. "
-        "This decouples the world-model quality from the VLM's usefulness for planning.",
-        "<b>Harder environments.</b> Move to DoorKey / KeyCorridor with multi-clause prompts "
-        "(&ldquo;agent next to the key&rdquo; → &ldquo;agent in front of the door&rdquo;) to test whether "
-        "CLIP can guide subgoal switching.",
+        "<b>Более длительное обучение на разнообразных данных.</b> Смешивать "
+        "случайные rollout-ы и rollout-ы планировщика (data-collection loop из "
+        "Dreamer) и обучать RSSM на 100k+ шагов. Точность reward-head особенно "
+        "должна вырасти, когда в буфере появятся успешные траектории.",
+        "<b>CEM вместо random shooting.</b> Заменить случайное семплирование "
+        "маленьким CEM (например, 3 итерации, top-k=10% элит, 100 кандидатов). "
+        "Тот же интерфейс, но лучше sample efficiency.",
+        "<b>Actor-critic поверх модели мира.</b> Полная целевая функция Dreamer "
+        "(imagined policy, обучаемая на λ-return от value-функции) уберёт стоимость "
+        "MPC на каждом шаге и даст более сильный baseline.",
+        "<b>Более сильный VLM.</b> SigLIP обычно лучше на agent-centric подписях, а "
+        "DINO/CLIPSeg/Grounded-SAM выдают dense goal maps вместо одного скаляра. "
+        "Альтернатива: дистиллировать CLIP-скоры в маленький MLP-head, обученный "
+        "на декодированных кадрах — это огромный прирост скорости планирования.",
+        "<b>Мультиязычный VLM.</b> Если важна поддержка русских промптов — "
+        "использовать <i>multilingual-clip</i>, SigLIP-2 или LiT-подход с mBERT.",
+        "<b>Скоринг реальных наблюдений тоже.</b> Полезная абляция: применять VLM "
+        "к реальному наблюдению на каждом шаге как shaping-бонус, чтобы reward-head "
+        "RSSM учился плотному псевдо-reward. Это отвязывает качество модели мира "
+        "от полезности VLM для планирования.",
+        "<b>Более сложные среды.</b> Перейти к DoorKey / KeyCorridor с "
+        "multi-clause промптами (&laquo;agent next to the key&raquo; → "
+        "&laquo;agent in front of the door&raquo;), чтобы проверить, может ли CLIP "
+        "направлять переключение подцелей.",
     ]:
         story.append(Paragraph(f"• {b}", styles["bullet"]))
 
-    # ---- Refs ----
-    story.append(Paragraph("References", styles["h2"]))
+    # ---- Ссылки ----
+    story.append(Paragraph("Ссылки", styles["h2"]))
     story.append(Paragraph(
         "1. Hafner, D. et al. <b>Learning Latent Dynamics for Planning from Pixels</b> (PlaNet). "
         "<a href='https://arxiv.org/abs/1811.04551' color='#20808D'>arXiv:1811.04551</a>",
@@ -378,8 +426,12 @@ def build():
         "<a href='https://arxiv.org/abs/2103.00020' color='#20808D'>arXiv:2103.00020</a>",
         styles["body"]))
     story.append(Paragraph(
-        "4. Chevalier-Boisvert, M. et al. <b>MiniGrid & Miniworld</b>. "
+        "4. Chevalier-Boisvert, M. et al. <b>MiniGrid &amp; Miniworld</b>. "
         "<a href='https://minigrid.farama.org/' color='#20808D'>minigrid.farama.org</a>",
+        styles["body"]))
+    story.append(Paragraph(
+        "5. Репозиторий проекта: "
+        "<a href='https://github.com/VadShv/tz-demo' color='#20808D'>github.com/VadShv/tz-demo</a>",
         styles["body"]))
 
     doc.build(story)

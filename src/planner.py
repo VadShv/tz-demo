@@ -1,13 +1,13 @@
-"""Random-shooting MPC planner over a learned RSSM world model.
+"""MPC-планировщик random shooting над обученной world-model RSSM.
 
-Given the current posterior state, sample N action sequences of length H,
-imagine trajectories with the RSSM, score each rollout with a provided
-scoring function, and return the first action of the best sequence.
+Из текущего posterior-состояния сэмплим N последовательностей действий длины H,
+воображаем траектории через RSSM, оцениваем каждый rollout переданной функцией
+скора и возвращаем первое действие лучшей последовательности.
 
-Scoring is fully pluggable via `score_fn(imagined_frames_uint8, imagined_rewards)`
-returning a scalar per candidate. This lets us swap in:
-  * `reward_only`: sum of predicted rewards from the reward head (baseline)
-  * `vlm`: sum/mean of CLIP scores over decoded imagined frames
+Функция скора `score_fn(imagined_frames_uint8, imagined_rewards)` полностью
+подключаемая и возвращает скаляр на кандидата. Это позволяет подменять:
+  * `reward_only`: сумма предсказанных наград от reward_head (baseline)
+  * `vlm`: сумма/среднее CLIP-скоров по декодированным воображаемым кадрам
 """
 from __future__ import annotations
 
@@ -25,9 +25,9 @@ def _sample_actions(num_seq: int, horizon: int, num_actions: int, rng: np.random
 
 
 def imagine_batch(model: RSSM, init_state: dict, actions: torch.Tensor):
-    """actions: (N, H) long. Returns (N, H+1) decoded frames uint8 and (N, H) predicted rewards.
+    """actions: (N, H) long. Возвращает (N, H+1) декодированных кадров uint8 и (N, H) предсказанных наград.
 
-    init_state contains (h, z) tensors of shape (1, D); we tile to N.
+    init_state содержит тензоры (h, z) формы (1, D); тайлим их до N.
     """
     N, H = actions.shape
     device = next(model.parameters()).device
@@ -41,11 +41,11 @@ def imagine_batch(model: RSSM, init_state: dict, actions: torch.Tensor):
 
     frames = []
     rewards = []
-    # include initial reconstruction
+    # включаем начальную реконструкцию
     frames.append(_tensor_to_img(model.decoder(model.feat(state))))
     for t in range(H):
         state = model.img_step(state, acts_oh[:, t])
-        # remove aux dist entries not needed downstream (kept in dict is fine)
+        # вспомогательные поля распределений внизу не нужны (остаются в словаре)
         rewards.append(model.reward_head(model.feat(state)).squeeze(-1))
         frames.append(_tensor_to_img(model.decoder(model.feat(state))))
     frames = torch.stack(frames, dim=1)   # (N, H+1, H, W, 3)
@@ -61,7 +61,7 @@ def random_shooting(
     score_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     rng: np.random.Generator,
 ) -> Tuple[int, dict]:
-    """Return best first action and diagnostics."""
+    """Возвращает лучшее первое действие и диагностику."""
     actions = _sample_actions(num_seq, horizon, model.cfg.action_dim, rng)
     with torch.inference_mode():
         frames, rewards = imagine_batch(model, init_state, actions)
@@ -74,21 +74,21 @@ def random_shooting(
     }
 
 
-# ---------- scoring functions ----------
+# ---------- функции скора ----------
 
 def make_reward_only_scorer():
     def _fn(frames, rewards):
-        # rewards: (N, H) — sum over horizon
+        # rewards: (N, H) — сумма по горизонту
         return rewards.sum(dim=1)
     return _fn
 
 
 def make_vlm_scorer(clip_scorer, include_initial: bool = False, discount: float = 1.0):
-    """Score = discounted sum of CLIP-scores across the rollout frames.
+    """Скор = дисконтированная сумма CLIP-скоров по кадрам rollout-а.
 
-    We deliberately include the *future* imagined frames (skip step 0 unless
-    include_initial=True) — this satisfies the "scoring must apply to future
-    rollout frames" requirement.
+    Намеренно берём *будущие* воображаемые кадры (пропускаем шаг 0, если
+    include_initial=False) — это удовлетворяет требованию задания «скорер применяется
+    к будущим кадрам rollout-а».
     """
     def _fn(frames, rewards):
         # frames: (N, H+1, H, W, 3) uint8

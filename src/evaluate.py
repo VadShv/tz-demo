@@ -1,5 +1,5 @@
-"""Evaluation loop: runs each agent for N episodes across M seeds,
-records success rate, average return, episode length, and optional GIFs.
+"""Цикл эвалюации: запускает каждого агента на N эпизодов через M сидов,
+фиксирует success rate, средний return, длину эпизода и (опционально) сохраняет GIF.
 """
 from __future__ import annotations
 
@@ -68,12 +68,12 @@ def evaluate(
     Path(gif_dir).mkdir(parents=True, exist_ok=True)
     Path(results_path).parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"[eval] loading model {ckpt_path}")
+    print(f"[eval] загрузка модели {ckpt_path}")
     model = _load_model(ckpt_path, device=device)
 
     scorer = None
     if include_vlm:
-        print("[eval] loading CLIP...")
+        print("[eval] загрузка CLIP...")
         scorer = CLIPScorer(goal_prompt=goal_prompt, negative_prompt=negative_prompt, device=device)
 
     env = MiniGridPixelEnv(env_id=env_id)
@@ -90,12 +90,12 @@ def evaluate(
 
         for name, agent in agents.items():
             key = f"{name}_seed{seed}"
-            print(f"[eval] running {key} for {num_episodes} episodes")
+            print(f"[eval] запуск {key} на {num_episodes} эпизодов")
             ep_returns, ep_successes, ep_steps = [], [], []
             t0 = time.time()
             for ep in range(num_episodes):
-                env._seed = seed * 1000 + ep  # vary env seed per episode
-                record = (ep == 0)  # save first ep as GIF
+                env._seed = seed * 1000 + ep  # меняем seed среды для каждого эпизода
+                record = (ep == 0)  # первый эпизод сохраняем как GIF
                 out = run_episode(env, agent, max_steps=max_steps, record=record)
                 ep_returns.append(out["return"])
                 ep_successes.append(out["success"])
@@ -123,9 +123,9 @@ def evaluate(
 
     with open(results_path, "w") as f:
         json.dump(all_results, f, indent=2)
-    print(f"[eval] wrote {results_path}")
+    print(f"[eval] сохранено в {results_path}")
 
-    # Aggregate across seeds
+    # Агрегация по сидам
     agg = {}
     for name in ["random", "wm_reward", "wm_vlm"]:
         vals = [v for k, v in all_results.items() if v["agent"] == name]
@@ -138,7 +138,7 @@ def evaluate(
             "num_seeds": len(vals),
             "num_episodes_per_seed": vals[0]["num_episodes"],
         }
-    print("\n[eval] aggregate:")
+    print("\n[eval] агрегат:")
     print(json.dumps(agg, indent=2))
     return all_results, agg
 
