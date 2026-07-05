@@ -27,11 +27,15 @@ def train_world_model(
     log_every: int = 50,
     save_path: str = "checkpoints/rssm.pt",
     seed: int = 0,
-    device: str = "cpu",
+    device: str | None = None,
 ):
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
+
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"[train] устройство: {device}")
 
     env = MiniGridPixelEnv(env_id=env_id)
     buffer = ReplayBuffer(capacity=num_episodes + 10)

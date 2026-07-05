@@ -61,13 +61,16 @@ def evaluate(
     max_steps: int = 60,
     gif_dir: str = "results/gifs",
     results_path: str = "results/metrics.json",
-    device: str = "cpu",
+    device: str | None = None,
     include_vlm: bool = True,
 ):
     seeds = seeds or [0, 1, 2]
     Path(gif_dir).mkdir(parents=True, exist_ok=True)
     Path(results_path).parent.mkdir(parents=True, exist_ok=True)
 
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"[eval] устройство: {device}")
     print(f"[eval] загрузка модели {ckpt_path}")
     model = _load_model(ckpt_path, device=device)
 
