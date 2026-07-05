@@ -24,36 +24,97 @@ METRICS_PATH = ROOT / "results" / "metrics.json"
 OUT_PATH = ROOT / "report" / "report.pdf"
 
 # ---------- шрифты ----------
-# DejaVu Sans поддерживает кириллицу и обычно установлен на Linux.
-SYSTEM_FONTS = {
-    "Body-Regular": [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-    ],
-    "Body-Bold": [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
-    ],
-    "Body-Mono": [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-        "/usr/share/fonts/dejavu/DejaVuSansMono.ttf",
-    ],
+# DejaVu Sans поддерживает кириллицу. На Colab и в других минимальных
+# окружениях системный DejaVu часто отсутствует, поэтому при необходимости
+# скачиваем TTF-и в локальный кэш и регистрируем оттуда.
+
+FONT_CACHE_DIR = Path(os.environ.get("WMVLM_FONT_CACHE", "/tmp/wmvlm_fonts"))
+
+# Источники TTF-файлов: берём с jsDelivr (npm-пакет dejavu-fonts-ttf).
+# jsDelivr быстрее и стабильнее GitHub, и актуальная 2.37 имеет кириллицу.
+_DEJAVU_MIRRORS = [
+    "https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/",
+    "https://unpkg.com/dejavu-fonts-ttf@2.37.3/ttf/",
+]
+
+
+def _mirror_urls(filename: str) -> list[str]:
+    return [base + filename for base in _DEJAVU_MIRRORS]
+
+
+FONT_SPECS = {
+    "Body-Regular": {
+        "filename": "DejaVuSans.ttf",
+        "system_paths": [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        ],
+        "urls": _mirror_urls("DejaVuSans.ttf"),
+    },
+    "Body-Bold": {
+        "filename": "DejaVuSans-Bold.ttf",
+        "system_paths": [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        ],
+        "urls": _mirror_urls("DejaVuSans-Bold.ttf"),
+    },
+    "Body-Mono": {
+        "filename": "DejaVuSansMono.ttf",
+        "system_paths": [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSansMono.ttf",
+        ],
+        "urls": _mirror_urls("DejaVuSansMono.ttf"),
+    },
 }
+
+
+def _download(url: str, dest: Path) -> bool:
+    import urllib.request
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        req = urllib.request.Request(url, headers={"User-Agent": "wmvlm-report"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read()
+        if len(data) < 10_000:
+            print(f"font download too small ({url}): {len(data)} bytes")
+            return False
+        dest.write_bytes(data)
+        return True
+    except Exception as e:
+        print(f"font download failed ({url}): {e}")
+        return False
+
+
+def _resolve_font_path(spec: dict) -> str | None:
+    # 1) системный шрифт
+    for pth in spec["system_paths"]:
+        if os.path.exists(pth):
+            return pth
+    # 2) кэш
+    cached = FONT_CACHE_DIR / spec["filename"]
+    if cached.exists() and cached.stat().st_size > 10_000:
+        return str(cached)
+    # 3) скачивание с любого рабочего зеркала
+    for url in spec["urls"]:
+        if _download(url, cached):
+            return str(cached)
+    return None
 
 
 def _register_fonts():
     have = True
-    for name, paths in SYSTEM_FONTS.items():
-        registered = False
-        for pth in paths:
-            if os.path.exists(pth):
-                try:
-                    pdfmetrics.registerFont(TTFont(name, pth))
-                    registered = True
-                    break
-                except Exception as e:
-                    print(f"font register failed ({name}): {e}")
-        if not registered:
+    for name, spec in FONT_SPECS.items():
+        path = _resolve_font_path(spec)
+        if path is None:
+            print(f"font {name}: no local file and download failed")
+            have = False
+            continue
+        try:
+            pdfmetrics.registerFont(TTFont(name, path))
+        except Exception as e:
+            print(f"font register failed ({name}) from {path}: {e}")
             have = False
     return have
 
