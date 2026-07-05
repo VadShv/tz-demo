@@ -16,7 +16,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, PageBreak,
-    Table, TableStyle,
+    Table, TableStyle, Image,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -156,6 +156,7 @@ def _styles(have_custom: bool):
             "code", fontName=mono_font, fontSize=8.5, leading=11, textColor=INK,
             backColor=BG, borderPadding=4, spaceAfter=6, leftIndent=6),
         "mono_name": mono_font,
+        "bold_name": bold_font,
     }
     return styles
 
@@ -386,16 +387,61 @@ def build():
 
     story.append(Paragraph("3.1 Визуализация", styles["h3"]))
     story.append(Paragraph(
-        f"Анимации первого эпизода каждого агента (включая прогон WM+VLM) "
-        f"лежат в папке <font face='{cf}'>results/gifs/</font> в репозитории: "
-        f"<font face='{cf}'>random_seed0_ep0.gif</font>, "
-        f"<font face='{cf}'>wm_reward_seed0_ep0.gif</font>, "
-        f"<font face='{cf}'>wm_vlm_seed0_ep0.gif</font>. По ним видно, что Random-агент "
-        f"блуждает до таймаута, WM+reward уверенно идёт к цели за ~17 шагов, а "
-        f"WM+VLM преимущественно крутится на месте без чёткого движения к цели — "
-        f"это наглядное подтверждение того, что CLIP-скорер на этих рендерах не даёт "
-        f"полезного градиента.",
+        f"Ниже — стоп-кадры первого эпизода (seed 0) для каждого агента: начальное "
+        f"состояние и последний кадр эпизода. Красный треугольник — агент, зелёная "
+        f"клетка — цель. Полные анимации лежат в <font face='{cf}'>results/gifs/</font>.",
         styles["body"]))
+    story.append(Spacer(1, 6))
+
+    gifs_dir = ROOT / "results" / "gifs"
+    thumb = 3.6 * cm   # размер одной ячейки
+    rows_spec = [
+        ("Random (success 5%)",       "random_seed0_ep0_start.png",    "random_seed0_ep0_end.png"),
+        ("WM + reward (success 100%)","wm_reward_seed0_ep0_start.png", "wm_reward_seed0_ep0_end.png"),
+        ("WM + VLM (success 0%)",     "wm_vlm_seed0_ep0_start.png",    "wm_vlm_seed0_ep0_end.png"),
+    ]
+
+    def _thumb_cell(fname):
+        path = gifs_dir / fname
+        if not path.exists():
+            return Paragraph(f"<font face='{cf}'>{fname}</font> — файл не найден", styles["small"])
+        img = Image(str(path), width=thumb, height=thumb)
+        img.hAlign = "CENTER"
+        return img
+
+    # заголовок таблицы
+    grid_data = [["", Paragraph("start", styles["small"]), Paragraph("end", styles["small"])]]
+    for label, start_f, end_f in rows_spec:
+        grid_data.append([
+            Paragraph(label, styles["body"]),
+            _thumb_cell(start_f),
+            _thumb_cell(end_f),
+        ])
+
+    grid = Table(
+        grid_data,
+        colWidths=[4.4 * cm, thumb + 0.4 * cm, thumb + 0.4 * cm],
+    )
+    grid.setStyle(TableStyle([
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
+        ("ALIGN",      (1, 0), (-1, -1), "CENTER"),
+        ("FONTNAME",   (0, 0), (-1, 0),  styles["bold_name"]),
+        ("BACKGROUND", (0, 0), (-1, 0),  colors.HexColor("#F0F0F0")),
+        ("BOX",        (0, 0), (-1, -1), 0.4, colors.HexColor("#CCCCCC")),
+        ("INNERGRID",  (0, 0), (-1, -1), 0.25, colors.HexColor("#DDDDDD")),
+        ("LEFTPADDING",  (0, 0), (-1, -1), 4),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING",   (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING",(0, 0), (-1, -1), 4),
+    ]))
+    story.append(grid)
+    story.append(Spacer(1, 6))
+    story.append(Paragraph(
+        "Random блуждает по верхнему ряду и до таймаута не доходит до цели; "
+        "WM+reward уверенно приходит на зелёную клетку за ~17 шагов; WM+VLM "
+        "остаётся в верхней части сетки — CLIP-скорер на этих рендерах не даёт "
+        "полезного градиента (подробнее в разделе 4).",
+        styles["small"]))
 
     # ---- Обсуждение ----
     story.append(Paragraph("4. Обсуждение", styles["h2"]))
