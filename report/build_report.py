@@ -396,9 +396,12 @@ def build():
     gifs_dir = ROOT / "results" / "gifs"
     thumb = 3.6 * cm   # размер одной ячейки
     rows_spec = [
-        ("Random (success 5%)",       "random_seed0_ep0_start.png",    "random_seed0_ep0_end.png"),
-        ("WM + reward (success 100%)","wm_reward_seed0_ep0_start.png", "wm_reward_seed0_ep0_end.png"),
-        ("WM + VLM (success 0%)",     "wm_vlm_seed0_ep0_start.png",    "wm_vlm_seed0_ep0_end.png"),
+        ("Random<br/><font size='7' color='#666666'>success 5% — показан редкий успешный эпизод (1 из 20)</font>",
+         "random_seed0_ep0_start.png",    "random_seed0_ep0_end.png"),
+        ("WM + reward<br/><font size='7' color='#666666'>success 100% — типичный эпизод, 17 шагов до цели</font>",
+         "wm_reward_seed0_ep0_start.png", "wm_reward_seed0_ep0_end.png"),
+        ("WM + VLM<br/><font size='7' color='#666666'>success 0% — типичный эпизод, таймаут 60 шагов</font>",
+         "wm_vlm_seed0_ep0_start.png",    "wm_vlm_seed0_ep0_end.png"),
     ]
 
     def _thumb_cell(fname):
@@ -437,11 +440,11 @@ def build():
     story.append(grid)
     story.append(Spacer(1, 6))
     story.append(Paragraph(
-        "Показаны по одному эпизоду на агента (статистика — в таблице выше). Средняя "
-        "длина эпизода у Random и WM+VLM — около 60 шагов (таймаут среды), у "
-        "WM+reward — 17 шагов (агент приходит на зелёную клетку). Стоп-кадры выше "
-        "— первые эпизоды из папки <font face='" + styles["mono_name"] + "'>results/gifs/</font>; "
-        "полную динамику видно в анимациях, причины поведения WM+VLM — в разделе 4.",
+        "WM+reward уверенно приходит на зелёную клетку, WM+VLM блуждает до таймаута. Кадр Random/end "
+        "показывает тот единственный успешный эпизод из 20 (первый эпизод seed 0, в котором случайная "
+        "политика дошла до цели); статистика в таблице выше корректна (5% — агрегация "
+        "по 2 seed × 20 эпизодов). Полные анимации — в "
+        "<font face='" + styles["mono_name"] + "'>results/gifs/</font>.",
         styles["small"]))
 
     # ---- Обсуждение ----
@@ -479,8 +482,8 @@ def build():
         "прерван вручную. Даже при успешном скорере такой бюджет делает online "
         "MPC с CLIP непрактичным без дистилляции в MLP-head.",
         "<b>Многоязычность.</b> CLIP от OpenAI почти не знает русский язык, поэтому "
-        "промпты пришлось оставить на английском. Попытки с русскоязычными "
-        "формулировками давали распределение скоров, клинически неотличимое от шума.",
+        "промпты пришлось оставить на английском. При русскоязычных формулировках "
+        "распределение скоров становится практически неотличимым от шума.",
     ]:
         story.append(Paragraph(f"• {b}", styles["bullet"]))
     story.append(Paragraph(
@@ -491,7 +494,7 @@ def build():
         "как источнике скор-сигнала для MiniGrid, а не в архитектуре.",
         styles["body"]))
 
-    story.append(Paragraph("4.2 Что попробовать при большем времени (future work)", styles["h3"]))
+    story.append(Paragraph("4.1 Что попробовать при большем времени (future work)", styles["h3"]))
     for b in [
         "<b>Более длительное обучение на разнообразных данных.</b> Смешивать "
         "случайные rollout-ы и rollout-ы планировщика (data-collection loop из "
