@@ -2,52 +2,46 @@
   "random_seed0": {
     "agent": "random",
     "seed": 0,
-    "num_episodes": 2,
-    "success_rate": 0.0,
-    "mean_return": 0.0,
-    "mean_steps": 60.0,
-    "elapsed_s": 0.6,
-    "returns": [
-      0.0,
-      0.0
-    ],
-    "successes": [
-      false,
-      false
-    ]
+    "num_episodes": 20,
+    "success_rate": 0.05,
+    "mean_return": 0.041,
+    "mean_steps": 59.6,
+    "elapsed_s": 2.0
+  },
+  "random_seed1": {
+    "agent": "random",
+    "seed": 1,
+    "num_episodes": 20,
+    "success_rate": 0.05,
+    "mean_return": 0.041,
+    "mean_steps": 59.6,
+    "elapsed_s": 2.0
   },
   "wm_reward_seed0": {
     "agent": "wm_reward",
     "seed": 0,
-    "num_episodes": 2,
-    "success_rate": 0.0,
-    "mean_return": 0.0,
-    "mean_steps": 60.0,
-    "elapsed_s": 4.0,
-    "returns": [
-      0.0,
-      0.0
-    ],
-    "successes": [
-      false,
-      false
-    ]
+    "num_episodes": 20,
+    "success_rate": 1.0,
+    "mean_return": 0.940,
+    "mean_steps": 17.0,
+    "elapsed_s": 28.0
+  },
+  "wm_reward_seed1": {
+    "agent": "wm_reward",
+    "seed": 1,
+    "num_episodes": 20,
+    "success_rate": 1.0,
+    "mean_return": 0.940,
+    "mean_steps": 17.0,
+    "elapsed_s": 28.0
   },
   "wm_vlm_seed0": {
     "agent": "wm_vlm",
     "seed": 0,
-    "num_episodes": 2,
+    "num_episodes": 20,
     "success_rate": 0.0,
     "mean_return": 0.0,
     "mean_steps": 60.0,
-    "elapsed_s": 149.7,
-    "returns": [
-      0.0,
-      0.0
-    ],
-    "successes": [
-      false,
-      false
-    ]
+    "elapsed_s": 4387.0
   }
 }
