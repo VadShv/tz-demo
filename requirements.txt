@@ -1,0 +1,11 @@
+torch>=2.0
+torchvision
+gymnasium>=1.0
+minigrid>=3.0
+open_clip_torch>=2.24
+numpy
+Pillow
+imageio
+imageio-ffmpeg
+tqdm
+pyyaml

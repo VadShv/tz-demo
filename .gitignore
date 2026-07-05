@@ -1,0 +1,24 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.env
+
+# Model artifacts
+checkpoints/*.pt
+
+# Downloaded assets
+report/_fonts/
+
+# Cache
+.cache/
+.mypy_cache/
+.pytest_cache/
+
+# Editor
+.vscode/
+.idea/
+.DS_Store
+
+# Keep smoke results, but not experimental logs
+results/*.log
